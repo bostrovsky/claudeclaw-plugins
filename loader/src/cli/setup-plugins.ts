@@ -36,7 +36,11 @@ async function main(): Promise<void> {
 
   const entries = fs.readdirSync(CLAUDECLAW_CONFIG, { withFileTypes: true });
   const tenantDirs = entries.filter(
-    (e) => e.isDirectory() && !e.name.startsWith('.') && !e.name.startsWith('_'),
+    (e) =>
+      e.isDirectory() &&
+      !e.name.startsWith('.') &&
+      !e.name.startsWith('_') &&
+      fs.existsSync(path.join(CLAUDECLAW_CONFIG, e.name, '.env')),
   );
 
   if (tenantDirs.length === 0) {
