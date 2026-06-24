@@ -1,0 +1,6 @@
+node_modules/
+# Compiled output — the loader ships as TypeScript source; the consumer builds it.
+loader/**/*.js
+loader/**/*.js.map
+!loader/plugins/**/web/**
+.DS_Store
