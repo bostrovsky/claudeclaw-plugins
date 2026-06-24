@@ -1,0 +1,152 @@
+import crypto from 'node:crypto';
+import { EventEmitter } from 'node:events';
+
+// ── Types ────────────────────────────────────────────────────────────
+
+export interface ContentPayload {
+  type: 'html' | 'markdown' | 'table' | 'chart' | 'clear';
+  content: string;
+  title?: string;
+  seq: number;
+  timestamp: number;
+}
+
+export interface TelegramUser {
+  id: number;
+  first_name: string;
+  last_name?: string;
+  username?: string;
+  language_code?: string;
+}
+
+// ── ContentChannel (per-tenant ring buffer + event emitter) ───────────
+
+const BUFFER_SIZE = 50;
+
+export class ContentChannel {
+  private buffer: ContentPayload[] = [];
+  private seq = 0;
+  private emitter = new EventEmitter();
+
+  constructor() {
+    this.emitter.setMaxListeners(20);
+  }
+
+  push(payload: Omit<ContentPayload, 'seq' | 'timestamp'>): ContentPayload {
+    const full: ContentPayload = {
+      ...payload,
+      seq: ++this.seq,
+      timestamp: Date.now(),
+    };
+
+    if (payload.type === 'clear') {
+      this.buffer = [];
+    } else {
+      this.buffer.push(full);
+      if (this.buffer.length > BUFFER_SIZE) {
+        this.buffer.shift();
+      }
+    }
+
+    this.emitter.emit('push', full);
+    return full;
+  }
+
+  getState(): ContentPayload[] {
+    return [...this.buffer];
+  }
+
+  getSeq(): number {
+    return this.seq;
+  }
+
+  onPush(handler: (payload: ContentPayload) => void): () => void {
+    this.emitter.on('push', handler);
+    return () => { this.emitter.off('push', handler); };
+  }
+}
+
+// ── Channel registry (keyed by chatId) ──────────────────────────────
+
+const channels = new Map<string, ContentChannel>();
+
+export function getContentChannel(chatId: string): ContentChannel {
+  let ch = channels.get(chatId);
+  if (!ch) {
+    ch = new ContentChannel();
+    channels.set(chatId, ch);
+  }
+  return ch;
+}
+
+export function emitContentEvent(
+  chatId: string,
+  payload: Omit<ContentPayload, 'seq' | 'timestamp'>,
+): ContentPayload {
+  const channel = getContentChannel(chatId);
+  return channel.push(payload);
+}
+
+// ── Telegram initData HMAC-SHA256 validation ────────────────────────
+
+/**
+ * Validates Telegram Mini App initData using HMAC-SHA256.
+ * See: https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
+ *
+ * Returns the user object if valid, null otherwise.
+ */
+export function validateTelegramInitData(
+  initData: string,
+  botToken: string,
+  maxAgeSeconds = 86400,
+): TelegramUser | null {
+  if (!initData || !botToken) return null;
+
+  try {
+    const params = new URLSearchParams(initData);
+    const hash = params.get('hash');
+    if (!hash) return null;
+
+    // Remove hash from params for verification
+    params.delete('hash');
+
+    // Sort remaining params alphabetically and join with newlines
+    const dataCheckString = [...params.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k}=${v}`)
+      .join('\n');
+
+    // Secret key = HMAC-SHA256("WebAppData", bot_token)
+    const secretKey = crypto
+      .createHmac('sha256', 'WebAppData')
+      .update(botToken)
+      .digest();
+
+    // Computed hash = HMAC-SHA256(secret_key, data_check_string)
+    const computedHash = crypto
+      .createHmac('sha256', secretKey)
+      .update(dataCheckString)
+      .digest('hex');
+
+    // Constant-time comparison
+    if (hash.length !== computedHash.length) return null;
+    if (!crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(computedHash))) {
+      return null;
+    }
+
+    // Check auth_date freshness
+    const authDate = params.get('auth_date');
+    if (authDate) {
+      const age = Math.floor(Date.now() / 1000) - parseInt(authDate, 10);
+      if (age > maxAgeSeconds) return null;
+    }
+
+    // Parse user
+    const userStr = params.get('user');
+    if (!userStr) return null;
+
+    return JSON.parse(userStr) as TelegramUser;
+  } catch {
+    return null;
+  }
+}

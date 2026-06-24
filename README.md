@@ -50,6 +50,16 @@ The installer (`loader/tools/apply-hooks.mjs`) makes exactly these additive edit
 
 No `config.ts` edit — the loader keeps its env-var registry internal.
 
+## Optional: the rendering add-on
+
+Some plugins turn structured content into a **styled PNG** instead of plain text (Canvas renders agent replies; Anki renders flashcard previews). That's shared platform infrastructure, not part of any one plugin, so it installs separately:
+
+```bash
+bash claudeclaw-plugins/install-rendering.sh
+```
+
+It copies `html-render.ts` (HTML→PNG) and `content-channel.ts` (the Telegram Mini App content channel) into core, so every rendering plugin shares one engine — no plugin bundles its own, none depends on another for it. It's a separate step because the renderer pulls in **Playwright** (~300MB Chromium); the base loader stays dependency-light, and only installs that actually render take on the browser. Plugins treat it as a soft dependency (render when present, fall back to text when not). See **[docs/RENDERING.md](docs/RENDERING.md)** for why Playwright and how it's used.
+
 ## Validated against vanilla
 
 Tested against upstream `claudeclaw-os` (`9f15b5d`): all hooks apply, the patched core typechecks, plugins compile, the install is idempotent, and uninstall restores `bot.ts`/`db.ts`/`index.ts`/`package.json` identical to vanilla.
