@@ -84,6 +84,20 @@ const HOOKS = [
       "    // Send text response (if there's any left after stripping markers)\n" +
       "    const textWithFooter = pluginResponseText ? pluginResponseText + costFooter : '';",
   },
+  {
+    file: 'src/bot.ts',
+    name: 'export replyIfLocked',
+    guard: 'export async function replyIfLocked',
+    find: 'async function replyIfLocked',
+    replace: 'export async function replyIfLocked',
+  },
+  {
+    file: 'src/bot.ts',
+    name: 'export canUseTelegramUrlButton',
+    guard: 'export function canUseTelegramUrlButton',
+    find: 'function canUseTelegramUrlButton',
+    replace: 'export function canUseTelegramUrlButton',
+  },
   // ── src/db.ts ─────────────────────────────────────────────────────
   {
     file: 'src/db.ts',

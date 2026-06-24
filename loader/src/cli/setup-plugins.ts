@@ -110,7 +110,9 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err) => {
-  console.error('setup-plugins failed:', err);
-  process.exit(1);
-});
+main()
+  .then(() => process.exit(0)) // a plugin's declaration pass may leave a timer/watcher alive
+  .catch((err) => {
+    console.error('setup-plugins failed:', err);
+    process.exit(1);
+  });

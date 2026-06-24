@@ -223,10 +223,16 @@ export async function loadPluginDeclarations(): Promise<McpServerDeclaration[]> 
       const plugin: ClaudeClawPlugin = mod.default;
       if (!plugin || typeof plugin.register !== 'function') continue;
 
-      // Stub context that only collects MCP declarations
+      // Stub context that only collects MCP declarations. The bot is a no-op
+      // proxy so a plugin's register() can run through its bot.command()/on()/
+      // api.* wiring without throwing (any access/call returns the proxy).
       const mcpCollector: McpServerDeclaration[] = [];
+      const noopBot: unknown = new Proxy(function () {}, {
+        get: () => noopBot,
+        apply: () => noopBot,
+      });
       const stubCtx: PluginContext = {
-        bot: {} as Bot,
+        bot: noopBot as Bot,
         isMainProcess: false,
         registerOwnedCommands: () => {},
         registerResponseMiddleware: () => {},
@@ -236,10 +242,17 @@ export async function loadPluginDeclarations(): Promise<McpServerDeclaration[]> 
         db: { registerMigration: () => {} },
       };
 
-      await plugin.register(stubCtx);
+      // registerMcpServer runs before any wiring, so the collector is populated
+      // even if a later step throws on the stub. Keep declarations regardless.
+      try {
+        await plugin.register(stubCtx);
+      } catch {
+        // register may do real bot wiring / side effects that fail on the stub;
+        // we only need the MCP declarations it recorded before failing.
+      }
       declarations.push(...mcpCollector);
     } catch {
-      // Skip plugins that fail in stub mode
+      // Skip plugins that fail to import
     }
   }
 

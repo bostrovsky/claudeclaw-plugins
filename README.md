@@ -42,7 +42,7 @@ The installer (`loader/tools/apply-hooks.mjs`) makes exactly these additive edit
 
 | File | Edit |
 |---|---|
-| `src/bot.ts` | import the loader; `createBot` becomes `async`; `await loadPlugins(bot, isMain)` before `setMyCommands`; aggregate plugin commands into `setMyCommands` + `OWN_COMMANDS`; run `getResponseMiddleware()` in the send path |
+| `src/bot.ts` | import the loader; `createBot` becomes `async`; `await loadPlugins(bot, isMain)` before `setMyCommands`; aggregate plugin commands into `setMyCommands` + `OWN_COMMANDS`; run `getResponseMiddleware()` in the send path; export `replyIfLocked` + `canUseTelegramUrlButton` (small lock/url helpers plugins commonly need) |
 | `src/db.ts` | export `getDb()` (hands the loader the tenant DB for `_plugin_migrations`) |
 | `src/index.ts` | `await createBot()`; `await shutdownPlugins()` on shutdown |
 | `package.json` | add `tsc -p tsconfig.plugins.json` to `build`; add `setup:plugins` script |
